@@ -1,9 +1,8 @@
 #include <SDL2/SDL.h>
 #include <iostream>
-#include <stdexcept>
-#include <string>
 #include <cmath>
-#include <portaudio.h>
+
+#include "AudioEngine.h"
 
 const int width = 1280;
 const int height = 720;
@@ -11,22 +10,22 @@ const int height = 720;
 #define SAMPLE_RATE 44100
 #define FRAMES_PER_BUFFER 256
 
-struct SineData {
-    float phase;
-};
+static AudioClip makeSineClip(float frequency, float seconds, int sampleRate) {
+    AudioClip clip;
+    clip.sampleRate = sampleRate;
+    clip.channels = 1;
+    int totalFrames = static_cast<int>(seconds * sampleRate);
+    clip.samples.resize(static_cast<size_t>(totalFrames));
 
-static int audioCallback(const void* input, void* output, unsigned long frameCount,
-const PaStreamCallbackTimeInfo* timeInfo, PaStreamCallbackFlags statusFlags, void* userData) {
-    float* out = (float*)output;
-    SineData* data = (SineData*)userData;
-
-    for (unsigned int i = 0; i < frameCount; i++) {
-        *out++ = sin(data->phase);
-        data->phase += 0.05f;
-        if (data->phase > 2.0f * M_PI) data->phase -= 2.0f * M_PI;
+    double phase = 0.0;
+    double phaseInc = 2.0 * M_PI * frequency / sampleRate;
+    for (int i = 0; i < totalFrames; ++i) {
+        clip.samples[static_cast<size_t>(i)] = static_cast<float>(std::sin(phase));
+        phase += phaseInc;
+        if (phase >= 2.0 * M_PI) phase -= 2.0 * M_PI;
     }
 
-    return paContinue;
+    return clip;
 }
 
 int main() {
@@ -54,30 +53,34 @@ int main() {
     bool running = true;
     SDL_Event event;
 
-    Pa_Initialize();
+    AudioEngine engine(SAMPLE_RATE, FRAMES_PER_BUFFER);
 
-    SineData data;
-    data.phase = 0;
+    AudioClip tone = makeSineClip(220.0f, 5.0f, SAMPLE_RATE);
+    Track& track = engine.addTrack();
+    track.volume = 0.2f;
+    track.pan = 0.0f;
+    track.clips.push_back({ &tone, 0.0, 0.0, 2.0 });
 
-    PaStream* stream;
+    if (!engine.start()) {
+        std::cerr << "Failed to start audio engine." << std::endl;
+        SDL_DestroyRenderer(renderer);
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        return 1;
+    }
 
-    Pa_OpenDefaultStream(
-        &stream,
-        0,          // no input channels
-        1,          // mono output
-        paFloat32,
-        SAMPLE_RATE,
-        FRAMES_PER_BUFFER,
-        audioCallback,
-        &data
-    );
-
-    Pa_StartStream(stream);
+    bool playing = true;
+    engine.setPlaying(playing);
 
     while (running) {
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) {
                 running = false;
+            } else if (event.type == SDL_KEYDOWN) {
+                if (event.key.keysym.sym == SDLK_SPACE) {
+                    playing = !playing;
+                    engine.setPlaying(playing);
+                }
             }
         }
 
@@ -87,10 +90,8 @@ int main() {
         SDL_RenderPresent(renderer);
     }
 
-    Pa_StopStream(stream);
-    Pa_CloseStream(stream);
-    Pa_Terminate();
-
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
     SDL_Quit();
     return 0;
 }
