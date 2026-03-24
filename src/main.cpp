@@ -68,28 +68,34 @@ int main() {
 
     AudioEngine engine(SAMPLE_RATE, FRAMES_PER_BUFFER);
     engine.addTrack();
+    engine.addTrack();
 
     std::vector<std::unique_ptr<AudioClip>> clipPool;
-    auto addClipToTrack = [&](AudioClip clip, double startTime) {
+    auto addClipToTrack = [&](AudioClip clip, double startTime, int trackIndex = 0) {
         double duration = clipDurationSeconds(clip);
         clipPool.push_back(std::make_unique<AudioClip>(std::move(clip)));
         auto lock = engine.lock();
         std::vector<Track>& tracks = engine.getTracks();
         if (tracks.empty()) tracks.emplace_back();
-        tracks[0].clips.push_back({ clipPool.back().get(), startTime, 0.0, duration });
+        tracks[trackIndex].clips.push_back({ clipPool.back().get(), startTime, 0.0, duration });
     };
 
     bool loaded = false;
-    AudioClip clip;
     std::string loadError;
-    loaded = engine.loadAudioFile("sounds/sound1.mp3", clip, &loadError);
-    if (!loaded) {
+    AudioClip clip1;
+    if(!engine.loadAudioFile("sounds/sound1.mp3", clip1, &loadError)) {
         std::cerr << "Failed to load audio file: " << loadError << std::endl;
+        addClipToTrack(makeSineClip(220.0f, 2.0f, SAMPLE_RATE), 0.0, 0);
     } else {
-        addClipToTrack(std::move(clip), 0.0);
+        addClipToTrack(std::move(clip1), 0.0, 0);
     }
-    if (!loaded) {
-        addClipToTrack(makeSineClip(220.0f, 2.0f, SAMPLE_RATE), 0.0);
+
+    AudioClip clip2;
+    if(!engine.loadAudioFile("sounds/sound2.mp3", clip2, &loadError)) {
+        std::cerr << "Failed to load audio file: " << loadError << std::endl;
+        addClipToTrack(makeSineClip(220.0f, 2.0f, SAMPLE_RATE), 0.0, 1);
+    } else {
+        addClipToTrack(std::move(clip2), 0.0, 1);
     }
 
     if (!engine.start()) {
