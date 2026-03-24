@@ -77,6 +77,9 @@ public:
     void clearTracks();
 
     bool loadAudioFile(const std::string& path, AudioClip& outClip, std::string* error = nullptr) const;
+    std::vector<Track>& getTracks();
+    const std::vector<Track>& getTracks() const;
+    std::unique_lock<std::mutex> lock();
 
 private:
     static int paCallback(const void* input, void* output, unsigned long frameCount,

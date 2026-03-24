@@ -97,6 +97,18 @@ void AudioEngine::clearTracks() {
     tracks.clear();
 }
 
+std::vector<Track>& AudioEngine::getTracks() {
+    return tracks;
+}
+
+const std::vector<Track>& AudioEngine::getTracks() const {
+    return tracks;
+}
+
+std::unique_lock<std::mutex> AudioEngine::lock() {
+    return std::unique_lock<std::mutex>(mutex);
+}
+
 bool AudioEngine::loadAudioFile(const std::string& path, AudioClip& outClip, std::string* error) const {
     SF_INFO info;
     std::memset(&info, 0, sizeof(info));

@@ -2,8 +2,11 @@
 #include <iostream>
 #include <cmath>
 #include <string>
+#include <vector>
+#include <memory>
 
 #include "AudioEngine.h"
+#include "UI.h"
 
 const int width = 1280;
 const int height = 720;
@@ -27,6 +30,12 @@ static AudioClip makeSineClip(float frequency, float seconds, int sampleRate) {
     }
 
     return clip;
+}
+
+static double clipDurationSeconds(const AudioClip& clip) {
+    if (clip.sampleRate <= 0 || clip.channels <= 0) return 0.0;
+    return static_cast<double>(clip.samples.size()) /
+        (static_cast<double>(clip.sampleRate) * static_cast<double>(clip.channels));
 }
 
 int main() {
@@ -53,26 +62,35 @@ int main() {
 
     bool running = true;
     SDL_Event event;
+    UIContext ui;
+    TimelineViewState timelineState;
+    TimelineStyle timelineStyle;
 
     AudioEngine engine(SAMPLE_RATE, FRAMES_PER_BUFFER);
+    engine.addTrack();
 
-    AudioClip tone;
+    std::vector<std::unique_ptr<AudioClip>> clipPool;
+    auto addClipToTrack = [&](AudioClip clip, double startTime) {
+        double duration = clipDurationSeconds(clip);
+        clipPool.push_back(std::make_unique<AudioClip>(std::move(clip)));
+        auto lock = engine.lock();
+        std::vector<Track>& tracks = engine.getTracks();
+        if (tracks.empty()) tracks.emplace_back();
+        tracks[0].clips.push_back({ clipPool.back().get(), startTime, 0.0, duration });
+    };
+
+    bool loaded = false;
+    AudioClip clip;
     std::string loadError;
-    bool loaded = engine.loadAudioFile("sounds/sound1.mp3", tone, &loadError);
+    loaded = engine.loadAudioFile("sounds/sound1.mp3", clip, &loadError);
     if (!loaded) {
         std::cerr << "Failed to load audio file: " << loadError << std::endl;
-        tone = makeSineClip(220.0f, 2.0f, SAMPLE_RATE);
+    } else {
+        addClipToTrack(std::move(clip), 0.0);
     }
-
-    double toneDuration = 0.0;
-    if (tone.sampleRate > 0 && tone.channels > 0) {
-        toneDuration = static_cast<double>(tone.samples.size()) /
-            (static_cast<double>(tone.sampleRate) * static_cast<double>(tone.channels));
+    if (!loaded) {
+        addClipToTrack(makeSineClip(220.0f, 2.0f, SAMPLE_RATE), 0.0);
     }
-    Track& track = engine.addTrack();
-    track.volume = 1.0f;
-    track.pan = 0.0f;
-    track.clips.push_back({ &tone, 0.0, 0.0, toneDuration });
 
     if (!engine.start()) {
         std::cerr << "Failed to start audio engine." << std::endl;
@@ -85,7 +103,12 @@ int main() {
     bool playing = true;
     engine.setPlaying(playing);
 
+    SDL_EventState(SDL_DROPFILE, SDL_ENABLE);
+
     while (running) {
+        ui.mousePressed = false;
+        ui.mouseReleased = false;
+
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) {
                 running = false;
@@ -94,11 +117,44 @@ int main() {
                     playing = !playing;
                     engine.setPlaying(playing);
                 }
+            } else if (event.type == SDL_MOUSEMOTION) {
+                ui.mouseX = event.motion.x;
+                ui.mouseY = event.motion.y;
+            } else if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
+                ui.mouseDown = true;
+                ui.mousePressed = true;
+                ui.mouseX = event.button.x;
+                ui.mouseY = event.button.y;
+            } else if (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_LEFT) {
+                ui.mouseDown = false;
+                ui.mouseReleased = true;
+                ui.mouseX = event.button.x;
+                ui.mouseY = event.button.y;
+            } else if (event.type == SDL_DROPFILE) {
+                char* droppedFile = event.drop.file;
+                if (droppedFile) {
+                    AudioClip clip;
+                    std::string loadError;
+                    if (engine.loadAudioFile(droppedFile, clip, &loadError)) {
+                        addClipToTrack(std::move(clip), engine.getTime());
+                    } else {
+                        std::cerr << "Failed to load dropped file: " << loadError << std::endl;
+                    }
+                    SDL_free(droppedFile);
+                }
             }
         }
 
+        int mx = 0;
+        int my = 0;
+        SDL_GetMouseState(&mx, &my);
+        ui.mouseX = mx;
+        ui.mouseY = my;
+
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);
+
+        drawTimeline(renderer, engine, timelineState, ui, timelineStyle);
 
         SDL_RenderPresent(renderer);
     }
