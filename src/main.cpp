@@ -29,7 +29,7 @@ static AudioClip makeSineClip(float frequency, float seconds, int sampleRate) {
     return clip;
 }
 
-int main(int argc, char** argv) {
+int main() {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
         std::cerr << "SDL_Init failed: " << SDL_GetError() << std::endl;
         return 1;
@@ -58,14 +58,9 @@ int main(int argc, char** argv) {
 
     AudioClip tone;
     std::string loadError;
-    bool loaded = false;
-    if (argc > 1) {
-        loaded = engine.loadAudioFile(argv[1], tone, &loadError);
-        if (!loaded) {
-            std::cerr << "Failed to load audio file: " << loadError << std::endl;
-        }
-    }
+    bool loaded = engine.loadAudioFile("sounds/sound1.mp3", tone, &loadError);
     if (!loaded) {
+        std::cerr << "Failed to load audio file: " << loadError << std::endl;
         tone = makeSineClip(220.0f, 2.0f, SAMPLE_RATE);
     }
 

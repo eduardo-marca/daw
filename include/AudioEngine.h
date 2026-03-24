@@ -92,6 +92,4 @@ private:
     PaStream* stream = nullptr;
     bool initialized = false;
     mutable std::mutex mutex;
-
-    
 };
