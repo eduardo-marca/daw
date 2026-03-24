@@ -1,7 +1,11 @@
 #include "AudioEngine.h"
 
+#include <portaudio.h>
+#include <sndfile.h>
+
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 AudioEngine::AudioEngine(double sr, unsigned long fpb)
     : sampleRate(sr), framesPerBuffer(fpb) {
@@ -91,6 +95,35 @@ Track& AudioEngine::addTrack() {
 void AudioEngine::clearTracks() {
     std::lock_guard<std::mutex> lock(mutex);
     tracks.clear();
+}
+
+bool AudioEngine::loadAudioFile(const std::string& path, AudioClip& outClip, std::string* error) const {
+    SF_INFO info;
+    std::memset(&info, 0, sizeof(info));
+
+    SNDFILE* file = sf_open(path.c_str(), SFM_READ, &info);
+    if (!file) {
+        if (error) *error = sf_strerror(nullptr);
+        return false;
+    }
+
+    if (info.frames <= 0 || info.channels <= 0 || info.samplerate <= 0) {
+        if (error) *error = "Invalid audio file metadata.";
+        sf_close(file);
+        return false;
+    }
+
+    outClip.sampleRate = info.samplerate;
+    outClip.channels = info.channels;
+    outClip.samples.resize(static_cast<size_t>(info.frames) * static_cast<size_t>(info.channels));
+
+    sf_count_t framesRead = sf_readf_float(file, outClip.samples.data(), info.frames);
+    if (framesRead < info.frames) {
+        outClip.samples.resize(static_cast<size_t>(framesRead) * static_cast<size_t>(info.channels));
+    }
+
+    sf_close(file);
+    return true;
 }
 
 int AudioEngine::paCallback(const void* /*input*/, void* output, unsigned long frameCount,

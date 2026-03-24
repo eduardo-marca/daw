@@ -5,6 +5,7 @@
 #include <vector>
 #include <cstddef>
 #include <mutex>
+#include <string>
 
 struct Transport {
     double currentTime;   // in seconds
@@ -74,6 +75,8 @@ public:
 
     Track& addTrack();
     void clearTracks();
+
+    bool loadAudioFile(const std::string& path, AudioClip& outClip, std::string* error = nullptr) const;
 
 private:
     static int paCallback(const void* input, void* output, unsigned long frameCount,

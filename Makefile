@@ -1,7 +1,7 @@
 CXX := g++
 CXXFLAGS ?= -O2 -Wall -Wextra -Iinclude
 LDFLAGS :=
-LDLIBS := -lSDL2 -lportaudio
+LDLIBS := -lSDL2 -lportaudio -lsndfile
 
 SRC := $(wildcard src/*.cpp)
 OBJ := $(patsubst src/%.cpp, build/%.o, $(SRC))
